@@ -1,0 +1,17 @@
+insert into QrCodeMst(
+                        SproviderId,
+                        ZoneId,
+                        QrCode,
+                        QrPath,
+                        QrPdfPath,
+                        Date
+                        )values(
+                            '583',
+                            0,
+                            '88537',
+                            '/phpqrcode/583/images/22331744.jpg',
+                            'phpqrcode/583/images/pdf_files/22331744.pdf',
+                            '2021-07-19'
+                            
+                            
+                            )

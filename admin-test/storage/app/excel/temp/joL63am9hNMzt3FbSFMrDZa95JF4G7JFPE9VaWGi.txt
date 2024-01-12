@@ -1,0 +1,2 @@
+card_no,dob,plan_id,effective_date,terminatiion_date,comment
+45465465,2023-02-15,746101A0,2023-02-30,2023-01-01,sadd

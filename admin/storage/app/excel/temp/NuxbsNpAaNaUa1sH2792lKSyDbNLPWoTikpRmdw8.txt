@@ -1,0 +1,2 @@
+card_no,dob,plan_id,effective_date,terminatiion_date,comment
+1321321,11/1/2010,123456,1/2/2023,1/2/2014,sample

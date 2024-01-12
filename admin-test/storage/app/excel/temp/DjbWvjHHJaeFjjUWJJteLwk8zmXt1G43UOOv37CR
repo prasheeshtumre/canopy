@@ -1,0 +1,126 @@
+<?php
+
+namespace App\Http\Controllers\Admin;
+
+use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Imports\UsersImport;
+use App\Models\Client;
+use App\Models\MainUser;
+use App\Models\Plan;
+use App\Models\QrCodeGenerator;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+
+error_reporting(0);
+
+class ExcelController extends Controller
+{
+    public function upload(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|mimes:xlsx,xls',
+        ]);
+
+        $file = $request->file('file')->store('excel/temp');
+        $result =  Excel::toCollection(new UsersImport, storage_path('app/' . $file))->toArray();
+
+        dd($result);
+
+        $plan_names = [];
+        $card_numbers = [];
+        $error_status  = true;
+        foreach ($result as $key => $val) {
+            foreach ($val as $key2 => $value) {
+                $card_noq = $value['card_no'];
+                if ($card_noq != '') {
+                    $card_no = $value['card_no'];
+                    $plan_id = $value['plan_id'];
+
+                    $plan =  DB::table('plan_mst')->where('plan_name', '=', $plan_id)->first();
+                    if (empty($plan)) {
+                        array_push($plan_names, ' Plan ID - ' . $plan_id . '  Not Found at row ' . $key2 + 2);
+                        $error_status = false;
+                    } else {
+                        $users = DB::table('users')->where('card_no', trim($card_no))->first();
+                        if ($users) {
+                            array_push($plan_names, ' Duplicate Card Number - ' . $card_no . ' at row ' . $key2 + 2);
+                            $error_status = false;
+                        }
+                    }
+                }
+            }
+        }
+
+
+
+        if ($error_status == false) {
+            $plan_names = $plan_names;
+            $clients = Client::all();
+            $plans = Plan::all();
+            $qr_codes = MainUser::all();
+            return view('admin.pages.canopy.generate_qr_code', get_defined_vars());
+        } else {
+
+            // $result =  Excel::import(new UsersImport, storage_path('app/' . $file));
+
+            foreach ($result as $key => $val) {
+                foreach ($val as $key2 => $value) {
+                    $card_number = $value['card_no'];
+                    if ($card_number != '') {
+                        $card_no = $value['card_no'];
+                        $plan_id = $value['plan_id'];
+                        $plan =  DB::table('plan_mst')->where('plan_name', '=', $plan_id)->first();
+
+
+                        $uuid = Str::uuid();
+                        $uuidString = $uuid->toString();
+
+                        $qr_link = "http://canopy.zoomqr.com/admin/admin/qr/" . $uuidString;
+
+                        DB::table('users')->insert([
+                            'uuid' => $uuidString,
+                            'plan_id' => $plan->plan_id,
+                            'card_no' => $card_no,
+                            'qr_link' => $qr_link,
+                            'dob' => date('d-M-y', strtotime($request->dob)),
+                            'effective_date' => date('d-M-y', strtotime($request->effective_date)),
+                            'terminatiion_date' => date('Ymd', strtotime($request->termination_date))
+                        ]);
+
+                        $qr_code = new QrCodeGenerator;
+                        $qr_code->client_id = $plan->client_id;
+                        $qr_code->uuid = $uuidString;
+                        $qr_code->plan_id = $plan->plan_id;
+                        $qr_code->card_number = $card_no;
+                        $qr_code->dob = date('Y-m-d', strtotime($request->dob));
+                        $qr_code->effective_date = date('Y-m-d', strtotime($request->effective_date));
+                        $qr_code->termination_date = date('Y-m-d', strtotime($request->termination_date));
+                        $qr_code->save();
+
+
+
+                        $url = "https://canopy.zoomqr.com/newqrcode/generate_qr_code.php?uuid=" . $uuidString;
+                        $ch = curl_init();
+                        curl_setopt($ch, CURLOPT_POST, false);
+                        curl_setopt($ch, CURLOPT_URL, $url);
+                        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+                        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+                        $smsres = curl_exec($ch);
+                        // dd($smsres);
+                        curl_close($ch);
+                        // return response()->json(['msg' => 'Qr Code generated Successfully...!'], 201);
+
+                    }
+                }
+            }
+            $clients = Client::all();
+            $plans = Plan::all();
+            $qr_codes = MainUser::all();
+            return view('admin.pages.canopy.generate_qr_code', get_defined_vars());
+            // return redirect()->back()->with('success', 'Data imported successfully!');
+        }
+    }
+}
